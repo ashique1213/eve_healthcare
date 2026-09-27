@@ -1,13 +1,5 @@
 # Eve Healthcare — Diagnostic Booking & Payment Backend Service
 
-[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
-[![Django](https://img.shields.io/badge/Django-5.2-green.svg)](https://www.djangoproject.com/)
-[![REST Framework](https://img.shields.io/badge/DRF-3.18-red.svg)](https://www.django-rest-framework.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io/)
-[![Celery](https://img.shields.io/badge/Celery-5.4-green.svg)](https://docs.celeryq.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Enabled-blue.svg)](https://www.docker.com/)
-
 A production-grade, asynchronous, and idempotent backend microservice for managing **diagnostic test bookings** and **simulated payment gateway processing**.
 
 ---

@@ -174,7 +174,7 @@ A production-grade, asynchronous, and idempotent backend microservice for managi
 
 ## Running Unit & Integration Tests
 
-The test suite contains **33 tests** covering authentication, centre pricing, bookings, payments, and idempotent webhook edge cases.
+The test suite contains **49 tests** covering authentication, centre pricing, bookings, payments, Celery background jobs, and idempotent webhook edge cases.
 
 ```bash
 pytest

@@ -146,3 +146,14 @@ class TestDiagnosticCentresAndTests:
         del_res = self.client.delete(detail_url)
         assert del_res.status_code == status.HTTP_204_NO_CONTENT
 
+    def test_not_found_endpoints(self):
+        fake_uuid = "00000000-0000-0000-0000-000000000000"
+        c_url = reverse('diagnostic-centres-detail', kwargs={'pk': fake_uuid})
+        t_url = reverse('diagnostic-tests-detail', kwargs={'pk': fake_uuid})
+        ct_url = reverse('centre-tests-detail', kwargs={'pk': fake_uuid})
+
+        assert self.client.get(c_url).status_code == status.HTTP_404_NOT_FOUND
+        assert self.client.get(t_url).status_code == status.HTTP_404_NOT_FOUND
+        assert self.client.get(ct_url).status_code == status.HTTP_404_NOT_FOUND
+
+

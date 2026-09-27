@@ -103,3 +103,81 @@ class TestSimulatedPayment:
         admin_response = self.client.get(history_url)
         assert admin_response.status_code == status.HTTP_200_OK
 
+    def test_payment_already_confirmed_booking_rejected(self):
+        self.booking.status = Booking.Status.CONFIRMED
+        self.booking.save()
+
+        self.client.force_authenticate(user=self.patient)
+        payload = {
+            "booking_id": str(self.booking.id),
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.payment_url, payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already confirmed" in str(response.data)
+
+    def test_payment_cancelled_booking_rejected(self):
+        self.booking.status = Booking.Status.CANCELLED
+        self.booking.save()
+
+        self.client.force_authenticate(user=self.patient)
+        payload = {
+            "booking_id": str(self.booking.id),
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.payment_url, payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cancelled booking" in str(response.data)
+
+    def test_payment_with_idempotency_key(self):
+        self.client.force_authenticate(user=self.patient)
+        payload = {
+            "booking_id": str(self.booking.id),
+            "status": "SUCCESS",
+            "idempotency_key": "user_idemp_key_9999"
+        }
+        response1 = self.client.post(self.payment_url, payload, format='json')
+        assert response1.status_code == status.HTTP_201_CREATED
+        payment_id = response1.data['id']
+
+        # Repeat payment with same idempotency key
+        response2 = self.client.post(self.payment_url, payload, format='json')
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.data['id'] == payment_id
+        assert Payment.objects.filter(idempotency_key="user_idemp_key_9999").count() == 1
+
+    def test_payment_using_booking_reference(self):
+        self.client.force_authenticate(user=self.patient)
+        payload = {
+            "booking_id": self.booking.booking_reference,
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.payment_url, payload, format='json')
+        assert response.status_code == status.HTTP_201_CREATED
+        self.booking.refresh_from_db()
+        assert self.booking.status == Booking.Status.CONFIRMED
+
+    def test_celery_notification_task(self):
+        from apps.payments.tasks import send_booking_confirmation_notification
+        result = send_booking_confirmation_notification(str(self.booking.id))
+        assert "Notification sent" in result
+
+    def test_celery_cleanup_expired_bookings(self):
+        from apps.payments.tasks import cleanup_expired_pending_bookings
+        # Create a stale booking
+        stale_booking = Booking.objects.create(
+            user=self.patient,
+            centre_test=self.centre_test,
+            amount=1500.00,
+            appointment_datetime=timezone.now() + timedelta(days=2),
+            status=Booking.Status.PENDING
+        )
+        # Mock created_at in the past
+        Booking.objects.filter(id=stale_booking.id).update(created_at=timezone.now() - timedelta(hours=48))
+
+        count = cleanup_expired_pending_bookings()
+        assert count >= 1
+        stale_booking.refresh_from_db()
+        assert stale_booking.status == Booking.Status.FAILED
+
+

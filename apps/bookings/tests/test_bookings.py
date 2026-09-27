@@ -182,3 +182,55 @@ class TestBookingSystem:
         response_unauth = self.client.post(cancel_url)
         assert response_unauth.status_code == status.HTTP_403_FORBIDDEN
 
+    def test_create_booking_via_centre_id_and_test_id(self):
+        self.client.force_authenticate(user=self.patient1)
+        future_time = (timezone.now() + timedelta(days=4)).isoformat()
+        payload = {
+            "centre_id": str(self.centre.id),
+            "test_id": str(self.test.id),
+            "appointment_datetime": future_time,
+            "notes": "Direct IDs booking"
+        }
+        response = self.client.post(self.booking_url, payload, format='json')
+        assert response.status_code == status.HTTP_201_CREATED
+        assert float(response.data["amount"]) == 1200.00
+        assert response.data["status"] == Booking.Status.PENDING
+
+    def test_create_booking_invalid_combination_fails(self):
+        self.client.force_authenticate(user=self.patient1)
+        future_time = (timezone.now() + timedelta(days=4)).isoformat()
+        payload = {
+            "centre_id": "00000000-0000-0000-0000-000000000000",
+            "test_id": str(self.test.id),
+            "appointment_datetime": future_time
+        }
+        response = self.client.post(self.booking_url, payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_cancel_failed_booking_rejected(self):
+        booking = Booking.objects.create(
+            user=self.patient1,
+            centre_test=self.centre_test,
+            amount=1200.00,
+            appointment_datetime=timezone.now() + timedelta(days=2),
+            status=Booking.Status.FAILED
+        )
+        self.client.force_authenticate(user=self.patient1)
+        cancel_url = reverse('booking-cancel', kwargs={'pk': str(booking.id)})
+        response = self.client.post(cancel_url)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Cannot cancel a failed booking" in response.data["error"]
+
+    def test_booking_detail_not_found(self):
+        self.client.force_authenticate(user=self.patient1)
+        detail_url = reverse('booking-detail', kwargs={'pk': "00000000-0000-0000-0000-000000000000"})
+        response = self.client.get(detail_url)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cancel_booking_not_found(self):
+        self.client.force_authenticate(user=self.patient1)
+        cancel_url = reverse('booking-cancel', kwargs={'pk': "00000000-0000-0000-0000-000000000000"})
+        response = self.client.post(cancel_url)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+

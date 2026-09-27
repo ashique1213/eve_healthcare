@@ -110,3 +110,69 @@ class TestIdempotentWebhook:
         }
         response = self.client.post(self.webhook_url, payload, format='json')
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_webhook_cancelled_booking_preserved(self):
+        # A cancelled booking should NOT be overridden to CONFIRMED by an incoming webhook
+        self.booking.status = Booking.Status.CANCELLED
+        self.booking.save()
+
+        payload = {
+            "event_id": "evt_cancel_5005",
+            "event_type": "payment.success",
+            "booking_id": str(self.booking.id),
+            "transaction_id": "txn_gateway_5555",
+            "amount": 600.00,
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.webhook_url, payload, format='json')
+        assert response.status_code == status.HTTP_200_OK
+
+        self.booking.refresh_from_db()
+        assert self.booking.status == Booking.Status.CANCELLED
+
+    def test_webhook_with_booking_reference_string(self):
+        payload = {
+            "event_id": "evt_ref_6006",
+            "event_type": "payment.success",
+            "booking_id": self.booking.booking_reference,
+            "transaction_id": "txn_gateway_6666",
+            "amount": 600.00,
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.webhook_url, payload, format='json')
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["status"] == "success"
+
+        self.booking.refresh_from_db()
+        assert self.booking.status == Booking.Status.CONFIRMED
+
+    def test_webhook_missing_required_fields_fails(self):
+        payload = {
+            "event_id": "evt_missing_7007",
+            # missing booking_id and transaction_id
+            "status": "SUCCESS"
+        }
+        response = self.client.post(self.webhook_url, payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_webhook_multiple_repeated_deliveries_is_safe(self):
+        payload = {
+            "event_id": "evt_multi_8008",
+            "event_type": "payment.success",
+            "booking_id": str(self.booking.id),
+            "transaction_id": "txn_gateway_8008",
+            "amount": 600.00,
+            "status": "SUCCESS"
+        }
+        for i in range(5):
+            res = self.client.post(self.webhook_url, payload, format='json')
+            assert res.status_code == status.HTTP_200_OK
+            if i == 0:
+                assert res.data["is_duplicate"] is False
+            else:
+                assert res.data["is_duplicate"] is True
+
+        # Exactly 1 payment and 1 webhook log
+        assert Payment.objects.filter(transaction_id="txn_gateway_8008").count() == 1
+        assert WebhookLog.objects.filter(event_id="evt_multi_8008").count() == 1
+

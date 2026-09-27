@@ -11,8 +11,15 @@ from .serializers import (
     CentreTestSerializer,
     CentreTestCreateUpdateSerializer
 )
+from django.core.cache import cache
 from .permissions import IsAdminOrReadOnly
-from .services import invalidate_centres_cache, invalidate_tests_cache
+from .services import (
+    invalidate_centres_cache,
+    invalidate_tests_cache,
+    CACHE_KEY_CENTRES_LIST,
+    CACHE_KEY_TESTS_LIST,
+    CACHE_TIMEOUT
+)
 
 
 class DiagnosticCentreListCreateView(APIView):
@@ -35,13 +42,24 @@ class DiagnosticCentreListCreateView(APIView):
 
     @extend_schema(summary="List all diagnostic centres", tags=["Centres & Tests"], responses={200: DiagnosticCentreSerializer(many=True)})
     def get(self, request, *args, **kwargs):
+        is_unfiltered = not request.query_params
+        if is_unfiltered:
+            cached_data = cache.get(CACHE_KEY_CENTRES_LIST)
+            if cached_data is not None:
+                return Response(cached_data)
+
         queryset = self.filter_queryset(self.get_queryset())
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = DiagnosticCentreSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+            response = paginator.get_paginated_response(serializer.data)
+            if is_unfiltered:
+                cache.set(CACHE_KEY_CENTRES_LIST, response.data, timeout=CACHE_TIMEOUT)
+            return response
         serializer = DiagnosticCentreSerializer(queryset, many=True)
+        if is_unfiltered:
+            cache.set(CACHE_KEY_CENTRES_LIST, serializer.data, timeout=CACHE_TIMEOUT)
         return Response(serializer.data)
 
     @extend_schema(summary="Create a new diagnostic centre (Admin)", tags=["Centres & Tests"], request=DiagnosticCentreSerializer, responses={201: DiagnosticCentreSerializer})
@@ -125,13 +143,24 @@ class DiagnosticTestListCreateView(APIView):
 
     @extend_schema(summary="List all diagnostic tests", tags=["Centres & Tests"], responses={200: DiagnosticTestSerializer(many=True)})
     def get(self, request, *args, **kwargs):
+        is_unfiltered = not request.query_params
+        if is_unfiltered:
+            cached_data = cache.get(CACHE_KEY_TESTS_LIST)
+            if cached_data is not None:
+                return Response(cached_data)
+
         queryset = self.filter_queryset(self.get_queryset())
         paginator = PageNumberPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         if page is not None:
             serializer = DiagnosticTestSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
+            response = paginator.get_paginated_response(serializer.data)
+            if is_unfiltered:
+                cache.set(CACHE_KEY_TESTS_LIST, response.data, timeout=CACHE_TIMEOUT)
+            return response
         serializer = DiagnosticTestSerializer(queryset, many=True)
+        if is_unfiltered:
+            cache.set(CACHE_KEY_TESTS_LIST, serializer.data, timeout=CACHE_TIMEOUT)
         return Response(serializer.data)
 
     @extend_schema(summary="Create a new diagnostic test (Admin)", tags=["Centres & Tests"], request=DiagnosticTestSerializer, responses={201: DiagnosticTestSerializer})

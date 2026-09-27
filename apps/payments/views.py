@@ -31,6 +31,8 @@ class SimulatedPaymentView(views.APIView):
     Updates booking status accordingly.
     """
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'payment'
 
     def post(self, request, *args, **kwargs):
         serializer = SimulatedPaymentRequestSerializer(data=request.data)
@@ -77,6 +79,8 @@ class PaymentWebhookView(views.APIView):
     GUARANTEED IDEMPOTENT: Duplicate event IDs or retry deliveries will NOT create duplicate payments or corrupt booking state.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'webhook'
 
     def post(self, request, *args, **kwargs):
         serializer = PaymentWebhookSerializer(data=request.data)
